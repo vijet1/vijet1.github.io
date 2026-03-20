@@ -1,0 +1,8 @@
+:root {
+  --primary: hsl(240, 8%, 10%);
+  --text: #ffffff;
+}
+
+body {
+  background-color: var(--primary);
+}
