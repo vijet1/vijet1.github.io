@@ -15,13 +15,15 @@
 .TFont1{
     font-family: "Chiron GoRound TC", sans-serif;
     font-optical-sizing: auto;
-    font-weight: 800;
+    font-weight: 400;
+    display: inline-block; /* needed for transform to work */
+    transform: scaleY(1);
     font-style: normal;
-    font-size: 10rem;
-    letter-spacing: 0.15em;
-    color: white;
+    font-size: 4rem;
+    letter-spacing: 0.1em;
+    color: rgb(215, 215, 215);
     background: transparent;
-    text-shadow: 5px 5px 2px black;
+    text-shadow: 5px 5px 0px black;
 }
 
 ::-moz-selection {
