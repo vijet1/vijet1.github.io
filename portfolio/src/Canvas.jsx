@@ -45,6 +45,10 @@ export class Gear {
   dist(og){
     return Math.sqrt(Math.pow(og.x - this.x, 2) + Math.pow(og.y - this.y, 2))
   }
+  axle(partner) {
+    this._axlePartner = partner;
+    return this;
+  }
 
   makeValid(gears){
     let hit = false;
@@ -54,10 +58,32 @@ export class Gear {
       let r = this.jointRadius(og);
       let tr = this.teethJoint(og);
 
+      let bind = false;
+
       if (dist < r){
-        return false;
+        if (og._axlePartner){
+          og = og._axlePartner
+          dist = this.dist(og);
+          r = this.jointRadius(og);
+          tr = this.teethJoint(og);
+
+          if (dist < r){
+            return false;
+          }else if (dist < r + tr){
+            bind = true;
+          }else{
+            return false;
+          }
+        }else{
+          return false;
+        }
       }else if (dist < r + tr){
-        // adjust turnRate, bridge sign, start angle.
+        bind = true
+      }
+
+      if (bind){
+        // adjust turnRate, bridge sign, start angle
+
         let ratio = og.getNumTeeth() / this.getNumTeeth();
         let turn = -og.turnRate * ratio
         
@@ -69,49 +95,41 @@ export class Gear {
         this.bridgesCurve = Math.abs(this.bridgesCurve) * Math.sign(-turn);
         hit = true
 
-        // --- Align teeth ---
-        let T_og   = (2 * Math.PI) / og.getNumTeeth();
-        let T_this = (2 * Math.PI) / this.getNumTeeth();
-
-        // Angle from og's center → this gear's center
+        let T_og = this.p.TWO_PI / og.getNumTeeth();
+        let T_this = this.p.TWO_PI / this.getNumTeeth();
         let contactAngle = Math.atan2(this.y - og.y, this.x - og.x);
-
-        // How far into a tooth-period og is at the contact point
         let phaseOg = ((contactAngle - og.angle) % T_og + T_og) % T_og;
-
-        // This gear needs to be offset by half a period to interlock (tooth ↔ gap)
         let desiredPhase = (((0.5 - phaseOg / T_og) * T_this) % T_this + T_this) % T_this;
-
-        // Contact point from this gear's perspective is the opposite direction
         this.angle = (contactAngle + Math.PI) - desiredPhase;
+
       }
     }
-
+    
     return true;
   }
 
   radii(r1, r2, r3, r4){
-    if (Math.abs(r1 - r2) < r1 / 10) r2 = 0;
-    this.innerSolidRadius  = r1;
-    this.bridgesRadius     = r1 + r2;
-    this.teethSolidRadius  = r1 + r2 + r3;
-    this.teethRadius       = r1 + r2 + r3 + r4;
-    this._hasBridgeRing    = this.bridgesRadius !== this.innerSolidRadius;
+    //if (Math.abs(r1 - r2) < r1 / 10) r2 = 0;
+    this.innerSolidRadius = r1;
+    this.bridgesRadius = r1 + r2;
+    this.teethSolidRadius = r1 + r2 + r3;
+    this.teethRadius = r1 + r2 + r3 + r4;
+    this._hasBridgeRing = this.bridgesRadius !== this.innerSolidRadius;
     return this;
   }
 
   bridge(num, curve, w1, w2){
-    this.bridges       = Math.floor(num);
-    this.bridgesCurve  = curve;
-    this.bridgesW1     = w1;
-    this.bridgesW2     = w2;
+    this.bridges = Math.floor(num);
+    this.bridgesCurve = curve;
+    this.bridgesW1 = w1;
+    this.bridgesW2 = w2;
     return this;
   }
 
   teeth(width, pinchWidth){
     pinchWidth = Math.min(width, pinchWidth);
     if (width - pinchWidth > 10) pinchWidth += 5;
-    this.teethWidth  = width;
+    this.teethWidth = width;
     this.teethsPinch = pinchWidth;
     return this;
   }
@@ -125,18 +143,21 @@ export class Gear {
    * Draw the gear ONCE into an offscreen p5.Graphics buffer.
    * Every subsequent frame is just one image blit + rotate transform.
    */
-  preRender(){
+  preRender(pg){
     const p = this.p;
-    const pad = 2;
-    const size = Math.ceil(this.teethRadius * 2) + pad * 2;
-    const cx = size / 2;
+    if (!pg){
+      const pad = 2;
+      const size = Math.ceil(this.teethRadius * 2) + pad * 2;
+      const cx = size / 2;
 
-    const pg = p.createGraphics(size, size);
-    pg.colorMode(p.HSB, 360, 100, 100, 100);
-    pg.bezierOrder(2);
+      pg = p.createGraphics(size, size);
+      pg.colorMode(p.HSB, 360, 100, 100, 100);
+      pg.bezierOrder(2);
+      pg.translate(cx, cx);
+    }
+
     pg.fill(this.color);
     pg.noStroke();
-    pg.translate(cx, cx);
 
     // ── Bridges ────────────────────────────────────────────────────────
     if (this._hasBridgeRing) {
@@ -188,7 +209,10 @@ export class Gear {
     pg.strokeWeight(teethSolidWeight + 0.5);
     pg.circle(0, 0, this.teethSolidRadius * 2 - teethSolidWeight);
 
-    // ── Gem ────────────────────────────────────────────────────────────
+    if (this._axlePartner){
+      this._axlePartner.preRender(pg);
+    }
+
     if (this.gemColor) {
       pg.noStroke();
       pg.fill(this.gemColor);
@@ -196,7 +220,7 @@ export class Gear {
     }
 
     this._pg = pg;
-    this._pgHalf = cx;
+    this._pgHalf = pg.width/2;
   }
 
   /** Hot path: just angle update + one image blit. */
@@ -205,13 +229,97 @@ export class Gear {
     const p = this.p;
     p.push();
     p.translate(this.x, this.y);
-    p.rotate(angle);
-    p.scale(1/this.scale);
-    if (this.scale > 1.01){
-      p.tint(255, p.map(this.scale, 1, 1.5, 100, 0));
+
+    p.scale(p.map(this.scale, 1, 1.5, 1, 0.9));
+    if (this.scale > 1.25){
+      p.tint(255, p.map(this.scale, 1, 1.5, 100, 90));
+      p.rotate(this._lastAngle);
+    }else{
+      p.rotate(angle);
+      this._lastAngle = angle;
     }
     p.image(this._pg, -this._pgHalf, -this._pgHalf);
     p.pop();
+  }
+
+  drawText(mult){
+    
+   
+
+      /* mindpg._TMark = ["MSC", d.getMilliseconds()]
+      minmsg._TMark = ["MS", d.getMilliseconds()]
+      minsg._TMark = ["S", d.getSeconds()]
+      minmg._TMark = ["M", d.getMinutes()]
+      minhg._TMark = ["H", d.getHours()] */
+    let marker = this._TMark;
+    if (marker){
+      let d = new Date();
+      const p = this.p;
+      p.push();
+      p.translate(this.x, this.y);
+      p.textFont('Georgia');
+      p.textAlign(p.CENTER, p.CENTER);
+      p.noStroke();
+
+      let hand = (color, length, width) => {
+        p.noStroke();
+        p.fill(color)
+        p.triangle(0, -width/2, 0, width/2, length, 0)
+        p.fill(this.gemColor || p.color(p.hue(this.color), p.saturation(this.color), p.brightness(this.color) * 0.8));
+        p.circle(0, 0, width + 2);
+      }
+
+      let clock = (angle, addLength, c1, c2, c3, hthick, wt, textn, texti) => {
+        p.noFill();
+        p.stroke(c2)
+        p.strokeWeight(wt)
+        p.circle(0,0,(this.teethRadius+addLength/2+wt/2)*2)
+        p.strokeWeight(2)
+        p.stroke(c1)
+        p.circle(0,0,(this.teethRadius+addLength/2+wt+1)*2)
+
+        p.noStroke();
+        p.fill(c1)
+        for (let i = 1; i <= textn; i++){
+          let a = i / textn * p.TWO_PI - p.HALF_PI;
+          if (this.turnRate < 0) a = -a;
+          let x = Math.cos(a) * (this.teethRadius + addLength/2 + wt/2);
+          let y = Math.sin(a) * (this.teethRadius + addLength/2 + wt/2);
+          p.text(i * texti, x, y);
+        }
+
+        p.rotate(angle)
+        hand(c3, this.teethRadius + addLength, hthick)
+        p.rotate(-angle)
+      }
+      
+      if (marker[0] == "H"){
+        p.textSize(10);
+        marker[1] ??= (d.getHours() % 12 * 3600000 + d.getMinutes() * 60000 + d.getSeconds() * 1000 + d.getMilliseconds()) / 43200000 * p.TWO_PI - this._lastAngle;
+        let angle = this._lastAngle + marker[1] - p.HALF_PI
+
+        clock(angle, 6, p.color(0), p.color(100), p.color(0), 7, 10, 4, 3)
+      }else if (marker[0] == "M"){
+        p.textSize(5);
+        marker[1] ??= (d.getMinutes() * 60000 + d.getSeconds() * 1000 + d.getMilliseconds()) / 3600000 * p.TWO_PI - this._lastAngle;
+        let angle = this._lastAngle + marker[1] - p.HALF_PI
+
+        clock(angle, 6, p.color(0), p.color(100), p.color(0), 3, 10, 4, 15)
+      }else if (marker[0] == "S"){
+        marker[1] ??= (d.getSeconds() * 1000 + d.getMilliseconds()) / 60000
+        let angle = this._lastAngle + marker[1] - p.HALF_PI
+
+        clock(angle, 6, p.color(0), p.color(80), p.color(360, 90, 70), 5, 3, 0, 0)
+      }else if (marker[0] == "MS"){
+        marker[1] ??= d.getMilliseconds() / 1000
+        let angle = this._lastAngle + marker[1] - p.HALF_PI
+
+        clock(angle, 6, p.color(360, 90, 70), p.color(80), p.color(360, 90, 70), 5, 3, 0, 0)
+      }
+
+      p.pop()
+    }
+
   }
 }
 
@@ -244,10 +352,12 @@ export default function Canvas(ref, designSize, buildGears){
 
     p.setup = () => {
       const { offsetWidth, offsetHeight } = ref.current;
+      console.log(offsetWidth, offsetHeight)
+      const s  = Math.min(offsetWidth, offsetHeight) / designSize;
       p.createCanvas(offsetWidth, offsetHeight);
       p.colorMode(p.HSB, 360, 100, 100, 100);
-      
-      gears = buildGears(p);
+      console.log(s)
+      gears = buildGears(p, offsetWidth/s, offsetHeight/s);
       for (let i = 0; i < gears.length; i++){
         gears[i].preRender();
       }
@@ -265,13 +375,18 @@ export default function Canvas(ref, designSize, buildGears){
       const my = (p.mouseY - p.height / 2) / s;
 
       const dt = p.deltaTime / 1000;
-      for (let i = gears.length - 1; i >= 0; i--) {
+      for (let i = 0; i < gears.length; i++) {
         let g = gears[i]
         const dist = Math.sqrt((mx - g.x) ** 2 + (my - g.y) ** 2);
         const hovered = dist - 15 < g.teethRadius;
         gears[i].scale = hovered ? p.lerp(gears[i].scale, 1.5, 0.2) : p.lerp(gears[i].scale, 1, 0.05);
 
         gears[i].draw(mult);
+      }
+
+      for (let i = 0; i < gears.length; i++) {
+        let g = gears[i]
+        gears[i].drawText(mult);
       }
 
       p.pop();

@@ -1,13 +1,14 @@
 :root{
     /* --gradient: repeating-linear-gradient(36deg, rgb(154, 154, 154), rgb(255, 255, 255), rgb(154, 154, 154) 20px); */
-    --gold: rgb(152, 132, 6);
-    --silver: rgb(129, 146, 151);
+    --gold1: rgb(208, 166, 51);
+    --gold2: rgb(214, 177, 74);
+    --gold3: rgb(238, 197, 82);
+    --silver1: rgb(146, 165, 170);
+    --silver2: rgb(153, 172, 178);
+    --silver3: rgb(167, 185, 192);
     --emerald: rgb(77, 188, 49);
     --saphire: rgb(45, 81, 200);
-    --brass: rgb( 209, 162,  52);
-    --pewter: rgb(121, 135, 148);
-    --jade: rgb(66, 173, 111);
-    --rose: rgb(235, 106, 149);
+    --rose: rgb(170, 36, 38);
 }
 
 * {
