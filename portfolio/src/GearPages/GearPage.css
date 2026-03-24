@@ -1,0 +1,40 @@
+:root{
+    /* --gradient: repeating-linear-gradient(36deg, rgb(154, 154, 154), rgb(255, 255, 255), rgb(154, 154, 154) 20px); */
+    --gold1: rgb(208, 166, 51);
+    --gold2: rgb(214, 177, 74);
+    --gold3: rgb(238, 197, 82);
+    --silver1: rgb(146, 165, 170);
+    --silver2: rgb(153, 172, 178);
+    --silver3: rgb(167, 185, 192);
+    --emerald: rgb(77, 188, 49);
+    --saphire: rgb(45, 81, 200);
+    --rose: rgb(170, 36, 38);
+}
+
+body {
+    margin: 0;
+    padding: 0px;
+    box-sizing: border-box;
+    width:"100vw";
+    height:"100vh";
+    background: rgb(0, 0, 0);
+    overflow:hidden;
+}
+
+.gears canvas {
+    background: transparent; /* don't let canvas override the div bg */
+    overflow: hidden;
+    pointer-events: none;
+}
+.gears{
+    background: transparent;
+    width:100vw;
+    height:100vh;
+    z-index: 9998;
+}
+
+.gearsClip{
+    background: transparent;
+    width:100%;
+    height:100%;
+}

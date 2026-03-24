@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useEffect, useRef } from "react"
 import p5 from "p5"
-import './index.css'
+import './GearPage.css'
 
 function pointOnCircle(radians, r){
   return [Math.cos(radians) * r, Math.sin(radians) * r];
@@ -12,7 +12,7 @@ function getAngleDistForPointDist(pointDist, r){
 
 let stepBegin = Date.now();
 
-export class Gear {
+export default class Gear {
   constructor(p, x, y, turn, angle, color) {
     this.p = p;
     this.x = x;
@@ -20,7 +20,7 @@ export class Gear {
     this.turnRate = turn;
     this.angle = angle;
     this.color = color;
-    this.scale = 1;
+    this.scale = 1.5;
   }
 
   clone(x=this.x, y=this.y, turn=this.turnRate, angle=this.angle){
@@ -50,9 +50,9 @@ export class Gear {
     return this;
   }
 
-  makeValid(gears){
+  makeValid(start, gears){
     let hit = false;
-    for (let i = 0; i < gears.length; i++){
+    for (let i = start; i < gears.length; i++){
       let og = gears[i];
       let dist = this.dist(og);
       let r = this.jointRadius(og);
@@ -223,7 +223,6 @@ export class Gear {
     this._pgHalf = pg.width/2;
   }
 
-  /** Hot path: just angle update + one image blit. */
   draw(mult){
     let angle = this.angle + (this.turnRate * mult) * (stepBegin - Date.now())/1000;
     const p = this.p;
@@ -243,7 +242,9 @@ export class Gear {
   }
 
   drawText(mult){
-    
+    if (this._lastAngle == null){
+      return;
+    }
    
 
       /* mindpg._TMark = ["MSC", d.getMilliseconds()]
@@ -257,8 +258,6 @@ export class Gear {
       const p = this.p;
       p.push();
       p.translate(this.x, this.y);
-      p.textFont('Georgia');
-      p.textAlign(p.CENTER, p.CENTER);
       p.noStroke();
 
       let hand = (color, length, width) => {
@@ -282,7 +281,6 @@ export class Gear {
         p.fill(c1)
         for (let i = 1; i <= textn; i++){
           let a = i / textn * p.TWO_PI - p.HALF_PI;
-          if (this.turnRate < 0) a = -a;
           let x = Math.cos(a) * (this.teethRadius + addLength/2 + wt/2);
           let y = Math.sin(a) * (this.teethRadius + addLength/2 + wt/2);
           p.text(i * texti, x, y);
@@ -293,25 +291,27 @@ export class Gear {
         p.rotate(-angle)
       }
       
+      let sign = 1
+      //console.log(sign)
       if (marker[0] == "H"){
         p.textSize(10);
-        marker[1] ??= (d.getHours() % 12 * 3600000 + d.getMinutes() * 60000 + d.getSeconds() * 1000 + d.getMilliseconds()) / 43200000 * p.TWO_PI - this._lastAngle;
+        marker[1] ??= (d.getHours() % 12 * 3600000 + d.getMinutes() * 60000 + d.getSeconds() * 1000 + d.getMilliseconds()) / 43200000 * p.TWO_PI * sign - this._lastAngle;
         let angle = this._lastAngle + marker[1] - p.HALF_PI
 
         clock(angle, 6, p.color(0), p.color(100), p.color(0), 7, 10, 4, 3)
       }else if (marker[0] == "M"){
         p.textSize(5);
-        marker[1] ??= (d.getMinutes() * 60000 + d.getSeconds() * 1000 + d.getMilliseconds()) / 3600000 * p.TWO_PI - this._lastAngle;
+        marker[1] ??= (d.getMinutes() * 60000 + d.getSeconds() * 1000 + d.getMilliseconds()) / 3600000 * p.TWO_PI * sign - this._lastAngle;
         let angle = this._lastAngle + marker[1] - p.HALF_PI
 
         clock(angle, 6, p.color(0), p.color(100), p.color(0), 3, 10, 4, 15)
       }else if (marker[0] == "S"){
-        marker[1] ??= (d.getSeconds() * 1000 + d.getMilliseconds()) / 60000
+        marker[1] ??= (d.getSeconds() * 1000 + d.getMilliseconds()) * sign / 60000
         let angle = this._lastAngle + marker[1] - p.HALF_PI
 
         clock(angle, 6, p.color(0), p.color(80), p.color(360, 90, 70), 5, 3, 0, 0)
       }else if (marker[0] == "MS"){
-        marker[1] ??= d.getMilliseconds() / 1000
+        marker[1] ??= d.getMilliseconds() * sign / 1000
         let angle = this._lastAngle + marker[1] - p.HALF_PI
 
         clock(angle, 6, p.color(360, 90, 70), p.color(80), p.color(360, 90, 70), 5, 3, 0, 0)
@@ -321,87 +321,4 @@ export class Gear {
     }
 
   }
-}
-
-
-function Clock() {
-  const [time, setTime] = useState(new Date());
-
-  useEffect(() => {
-    let timeout;
-    const tick = () => {
-      const d = new Date();
-      setTime(d);
-      timeout = setTimeout(tick, 1000 - d.getMilliseconds() % 1000);
-    };
-    tick();
-    return () => clearTimeout(timeout);
-  }, []);
-
-  const [hhmm, ampm] = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }).split(" ");
-  return <>
-    <span className="TFont1">{hhmm}</span>
-    <span className="TFont1">{ampm ?? time.toLocaleTimeString().split(" ")[1]}</span>
-  </>;
-}
-
-export default function Canvas(ref, designSize, buildGears){
-  return function(p){
-    let gears;
-    let mult = 1;
-
-    p.setup = () => {
-      const { offsetWidth, offsetHeight } = ref.current;
-      console.log(offsetWidth, offsetHeight)
-      const s  = Math.min(offsetWidth, offsetHeight) / designSize;
-      p.createCanvas(offsetWidth, offsetHeight);
-      p.colorMode(p.HSB, 360, 100, 100, 100);
-      console.log(s)
-      gears = buildGears(p, offsetWidth/s, offsetHeight/s);
-      for (let i = 0; i < gears.length; i++){
-        gears[i].preRender();
-      }
-    }
-
-    p.draw = () => {
-      p.clear();
-      p.push();
-      p.translate(p.width / 2, p.height / 2);
-
-      const s = Math.min(p.width, p.height) / designSize;
-      p.scale(s);
-
-      const mx = (p.mouseX - p.width  / 2) / s;
-      const my = (p.mouseY - p.height / 2) / s;
-
-      const dt = p.deltaTime / 1000;
-      for (let i = 0; i < gears.length; i++) {
-        let g = gears[i]
-        const dist = Math.sqrt((mx - g.x) ** 2 + (my - g.y) ** 2);
-        const hovered = dist - 15 < g.teethRadius;
-        gears[i].scale = hovered ? p.lerp(gears[i].scale, 1.5, 0.2) : p.lerp(gears[i].scale, 1, 0.05);
-
-        gears[i].draw(mult);
-      }
-
-      for (let i = 0; i < gears.length; i++) {
-        let g = gears[i]
-        gears[i].drawText(mult);
-      }
-
-      p.pop();
-    };
-
-    p.mouseWheel = (event) => {
-      mult += event.delta * -0.00005
-      mult = Math.max(-20, Math.min(20, mult))
-      return false;
-    };
-
-    p.windowResized = () => {
-      const { offsetWidth, offsetHeight } = ref.current;
-      p.resizeCanvas(offsetWidth, offsetHeight);
-    }
-  }
-  
 }

@@ -1,30 +1,14 @@
 import { useState } from 'react'
 import { useEffect, useRef } from "react"
 import p5 from "p5"
-import './index.css'
-import Canvas, { Gear } from './Canvas'
+import './GearPage.css'
+import Canvas from './GearCanvas'
+import Gear from './Gear'
+import {NavLink, Outlet} from "react-router";
 
-function setTabHeader(iconLink, title){
-  if (iconLink){
-    const favicon = document.querySelector("link[rel='icon']");
-    favicon.href = iconLink;
-  }
-  if (title){
-    document.title = title;
-  }
-}
-setTabHeader("/rose.png", "Ultra-Clock");
 
-function GenerateLayer(p, sets, num, tries, w, h, affector){
-  let gears = [];
-  let i = 0;
 
-  let pool = [];
-  for (let i = 0; i < sets.length; i++) {
-    let weight = Math.floor(sets[i].teethRadius / 5); // bigger = more entries
-    for (let w = 0; w < weight; w++) pool.push(sets[i]);
-  }
-
+function GenerateLayer(gears, p, sets, pool, num, tries, w, h, affector, start, i, nextFunc){
   function genAxlePartner(gear){
     let newRand = [];
     for (let i = 0; i < sets.length; i++){
@@ -40,9 +24,17 @@ function GenerateLayer(p, sets, num, tries, w, h, affector){
     }
   }
 
+  i ??= gears.length;
+  start ??= i;
 
-
+  let placed = false
   do{
+    if (placed){
+      setTimeout(GenerateLayer, 0, gears, p, sets, pool, num, tries, w, h, affector, start, i, nextFunc)
+      return;
+    }
+    placed = false;
+
     let existingGear = gears[i];
     if (existingGear){
       if (existingGear.x < -w/2 || existingGear.x > w/2 || existingGear.y < -h/2 || existingGear.y > h/2){
@@ -75,7 +67,7 @@ function GenerateLayer(p, sets, num, tries, w, h, affector){
       tryGear.x = x;
       tryGear.y = y;
 
-      if (tryGear.makeValid(gears)){
+      if (tryGear.makeValid(start, gears)){
         
         if (tryGear.teethRadius > 20){
           genAxlePartner(tryGear)
@@ -83,6 +75,7 @@ function GenerateLayer(p, sets, num, tries, w, h, affector){
         affector(tryGear)
 
         gears.push(tryGear);
+        placed = true;
       }
 
       if (existingGear._tries > tries){
@@ -93,50 +86,68 @@ function GenerateLayer(p, sets, num, tries, w, h, affector){
       //genAxlePartner(gear)
       affector(gear)
       gears.push(gear)
+      placed = true;
     }
+    //console.log(i, gears.length, num)
   } while (i < gears.length && gears.length < num)
-  return gears;
+  
+  if (nextFunc){
+    nextFunc()
+  }
 }
 
-function markTimers(p, wi, hi, gears){
-  const milliseconds = p.TWO_PI
-  const seconds = p.TWO_PI / 60
-  const minutes = p.TWO_PI / 3600
-  const hours = p.TWO_PI / 43200
+function markTimers(p, wi, hi, start, gears){
+  let matches = [[p.TWO_PI], [p.TWO_PI / 60], [p.TWO_PI / 3600], [p.TWO_PI / 43200]]
 
-  let mindp = 1e9, mindpg;
-  let minms = 1e9, minmsg;
-  let mins= 1e9, minsg;
-  let minm = 1e9, minmg;
-  let minh = 1e9, minhg;
-  
-  for (let i = 0; i < gears.length; i++){
+  //console.log(start, gears.length)
+  for (let i = start; i < gears.length; i++) {
     let gear = gears[i]
-    if (gear.x < -wi / 2.2 || gear.x > wi / 2.2 || gear.y < -hi / 2.2 || gear.y > hi / 2.2){
+    if (gear.x < -wi / 2 || gear.x > wi / 2 || gear.y < -hi / 2 || gear.y > hi / 2) {
       continue;
     }
-    let tr = Math.abs(gear.turnRate)
-    let teethPerMs = gear.getNumTeeth() * (tr / p.TWO_PI) / milliseconds;
-    let dp = Math.abs(teethPerMs - 1);
-    if (dp < mindp) mindp = dp, mindpg = gear;
-    let ms = Math.abs(tr - milliseconds); if (ms < minms) {minms = ms, minmsg = gear;}
-    let s = Math.abs(tr - seconds); if (s < mins) {mins = s, minsg = gear;}
-    let m = Math.abs(tr - minutes); if (m < minm) {minm = m, minmg = gear;}
-    let h = Math.abs(tr - hours); if (h < minh) {minh = h, minhg = gear;}
+    let tr = gear.turnRate
+    //console.log(tr)
+    if (tr > 0){
+      continue;
+    }
+    for (let k = 0; k < matches.length; k++) {
+      let ms = Math.abs(matches[k][0] - Math.abs(tr));
+      matches[k][1] ??= []
+      matches[k][1].push([gear, ms])
+    }
   }
 
-  mindpg._TMark = ["MSC"]
-  minmsg._TMark = ["MS"]
-  minsg._TMark = ["S"]
-  minmg._TMark = ["M"]
-  minhg._TMark = ["H"]
+  //console.log(matches)
+  for (let i = 0; i < matches.length; i++) {
+    matches[i][1].sort((a, b) => b[1] - a[1])
+  }
 
-  console.log(mindpg, minmsg, minsg, minmg, minhg)
+  for (let i = 0; i < matches.length; i++) {
+    let ii = matches[i][1].length - 1
+    let f = false
+    do {
+      f = false
+      for (let ik = 0; ik < matches.length; ik++) {
+        if (ik != i && matches[ik][1][matches[ik][1].length - 1][0] === matches[i][1][ii][0]) {
+          f = true; break;
+        }
+      }
+      if (f){
+        matches[i][1].pop()
+        ii--;
+      }
+    } while (f)
+  }
+  
+  matches[0][1][matches[0][1].length - 1][0]._TMark = ["MS"]
+  matches[1][1][matches[1][1].length - 1][0]._TMark = ["S"]
+  matches[2][1][matches[2][1].length - 1][0]._TMark = ["M"]
+  matches[3][1][matches[3][1].length - 1][0]._TMark = ["H"]
+
+  //console.log(matches)
 }
 
-
-
-function App() {
+export default function GearPage() {
   let ref = useRef(null);
   let designSize = 600;
 
@@ -154,7 +165,7 @@ function App() {
 
 
     
-    function buildGears(p, w, h){
+    function buildGears(gears, p, w, h){
       let sm = 5;
       let sets = [
         new Gear(p, 0, 0, 1.5*sm, 0, p.color(gold1)).radii(7,14,1,4).bridge(3,-0.3,3,2).teeth(3,0).gem(p.color(emerald)),
@@ -174,12 +185,15 @@ function App() {
 
         new Gear(p, 0, 0, 1.55*sm, 0, silver3).radii(11, 13, 2, 4).bridge(3, -0.5, 15, 8).teeth(3, 0).gem(p.color(rose)),
       ]
-      
 
-      let gears = [];
+      let pool = [];
+      for (let i = 0; i < sets.length; i++) {
+        let weight = Math.floor(sets[i].teethRadius / 5); // bigger = more entries
+        for (let w = 0; w < weight; w++) pool.push(sets[i]);
+      }
 
       let layer2dark = 0.35
-      let l2 = GenerateLayer(p, sets, 600,150, w, h, (gear) => {
+      GenerateLayer(gears, p, sets, pool, 800,150, w, h, (gear) => {
         gear.color = p.color(p.hue(gear.color), p.saturation(gear.color), p.brightness(gear.color) * layer2dark)
         if (gear.gemColor){
           gear.gemColor = p.color(p.hue(gear.gemColor), p.saturation(gear.gemColor), p.brightness(gear.gemColor) * layer2dark)
@@ -190,35 +204,26 @@ function App() {
             gear._axlePartner.gemColor = p.color(p.hue(gear._axlePartner.gemColor), p.saturation(gear._axlePartner.gemColor), p.brightness(gear._axlePartner.gemColor) * layer2dark)
           }
         }
+      }, null, null, () => {
+        let smt = gears.length
+        //console.log(smt)
+        GenerateLayer(gears, p, sets, pool, 800, 150, w, h, (gear) => {
+          
+        }, null, null, () => {
+          markTimers(p, w, h, smt, gears)
+        })
       })
-
-      let l1 = GenerateLayer(p, sets, 600, 150, w, h, (gear) => {
-        
-      })
-
-      markTimers(p, w, h, l1)
-
-      gears = gears.concat(l2, l1);
-
-      
-
-      return gears
     }
 
     const p = new p5(Canvas(ref, designSize, buildGears), ref.current);
     return () => p.remove();
   }, []);
 
-  /* <div className='TIME'>
-      <Clock />
-    </div> */
-
   return (
   <div className="gears">
+    
     <div ref={ref} className="gearsClip" >
     </div>
   </div>
   );
 }
-
-export default App;
